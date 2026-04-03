@@ -219,14 +219,13 @@
       <div class="filter-bar">
         <select id="f-rep" onchange="renderTable()"><option value="">전체 담당자</option><option>오지수</option><option>이승빈</option><option>박은주</option></select>
         <select id="f-status" onchange="renderTable()"><option value="">전체 상태</option><option>대기중</option><option>견적완료</option><option>수주</option><option>미수주</option></select>
-        <select id="f-cat" onchange="renderTable()"><option value="">전체 분류</option><option>시약</option><option>소재</option></select>
         <span style="flex:1;"></span>
         <span id="table-count" style="font-size:12px;color:var(--text-secondary);"></span>
       </div>
       <div class="card table-wrap">
         <table>
           <thead><tr>
-            <th>문의일</th><th>담당자</th><th>고객사</th><th>분류</th><th>제품명</th><th>금액</th><th>상태</th><th>액션</th>
+            <th>문의일</th><th>담당자</th><th>고객사</th><th>Cat No.</th><th>제품명</th><th>CAS No.</th><th>Package</th><th>수량</th><th>금액</th><th>상태</th><th>액션</th>
           </tr></thead>
           <tbody id="inq-tbody"></tbody>
         </table>
@@ -243,16 +242,16 @@
     <div id="tab-analytics" class="content">
       <div class="two-col">
         <div>
-          <div class="section-title">제품 분류별 수주 현황</div>
-          <div class="card card-pad"><div class="chart-wrap" style="height:220px;"><canvas id="cat-chart"></canvas></div></div>
-        </div>
-        <div>
           <div class="section-title">담당자별 수주 건수</div>
           <div class="card card-pad"><div class="chart-wrap" style="height:220px;"><canvas id="rep-chart"></canvas></div></div>
         </div>
+        <div>
+          <div class="section-title">전체 결과 현황</div>
+          <div class="card card-pad"><div class="chart-wrap" style="height:220px;"><canvas id="result-chart"></canvas></div></div>
+        </div>
       </div>
-      <div class="section-title">전체 결과 현황</div>
-      <div class="card card-pad"><div class="chart-wrap" style="height:200px;"><canvas id="result-chart"></canvas></div></div>
+      <div class="section-title">담당자별 수주율 비교</div>
+      <div class="card card-pad"><div class="chart-wrap" style="height:200px;"><canvas id="rate-chart"></canvas></div></div>
     </div>
 
   </div><!-- shell -->
@@ -266,11 +265,11 @@
       <div class="form-grid">
         <div class="fg"><label>영업담당자</label><select id="i-rep"><option>오지수</option><option>이승빈</option><option>박은주</option></select></div>
         <div class="fg"><label>고객사</label><input id="i-customer" type="text" placeholder="고객사명"></div>
-        <div class="fg"><label>제품 분류</label><select id="i-cat"><option>시약</option><option>소재</option><option>시약/소재 복합</option></select></div>
+        <div class="fg"><label>Cat No.</label><input id="i-partno" type="text" placeholder="예: G7513"></div>
         <div class="fg"><label>제품명</label><input id="i-product" type="text" placeholder="제품명"></div>
-        <div class="fg"><label>수량</label><input id="i-qty" type="text" placeholder="수량 및 단위"></div>
-        <div class="fg"><label>희망납기</label><input id="i-deadline" type="date"></div>
-        <div class="fg form-full"><label>요청사항</label><textarea id="i-note" placeholder="규격, 특이사항 등"></textarea></div>
+        <div class="fg"><label>CAS No.</label><input id="i-casno" type="text" placeholder="예: 67-68-5"></div>
+        <div class="fg"><label>Package</label><input id="i-pkg" type="text" placeholder="예: 500mL, 1g, 96well"></div>
+        <div class="fg"><label>수량</label><input id="i-qty" type="text" placeholder="수량"></div>
       </div>
       <div id="inq-status" class="status-banner">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7L12 13 2 7"/></svg>
@@ -314,11 +313,8 @@
 <script>
 // ── 설정 (이메일 주소 수정 가능) ──────────────────────────────
 const CONFIG = {
-  buyerEmail: 'buyer@company.com',
-  repEmails: { '오지수': 'ojisu@company.com', '이승빈': 'lsb@company.com', '박은주': 'peju@company.com' },
-  // GitHub Pages에서는 Anthropic API를 직접 호출할 수 없습니다.
-  // 알림은 로컬 대시보드에 기록됩니다.
-  // 실제 이메일 발송은 별도 백엔드(Firebase Functions, Supabase 등) 연동 필요
+  buyerEmail: 'ink@avention.co.kr',
+  repEmails: { '오지수': 'avention@avention.co.kr', '이승빈': 'seungbin@avention.co.kr', '박은주': 'bio@avention.co.kr' },
   useApiNotify: false
 };
 
@@ -327,14 +323,14 @@ const AV = ['av-b','av-t','av-c'];
 
 // ── 초기 데이터 ───────────────────────────────────────────────
 const DEFAULT_DATA = [
-  {id:1,date:"2025-02-15",rep:"오지수",customer:"유한양행",category:"시약",product:"MTT Assay Kit",qty:"10kit",deadline:"2025-03-01",note:"",status:"수주",price:980000,supplier:"프로메가",delivery:"2025-02-26",memo:"",quoteDate:"2025-02-17"},
-  {id:2,date:"2025-02-20",rep:"이승빈",customer:"SK바이오팜",category:"소재",product:"PLGA 마이크로스피어",qty:"1g",deadline:"2025-03-10",note:"",status:"수주",price:5500000,supplier:"폴리사이언스",delivery:"2025-03-06",memo:"",quoteDate:"2025-02-22"},
-  {id:3,date:"2025-03-10",rep:"오지수",customer:"한국바이오텍",category:"시약",product:"PBS 버퍼 1L",qty:"50개",deadline:"2025-03-25",note:"",status:"수주",price:1250000,supplier:"시그마알드리치",delivery:"2025-03-22",memo:"",quoteDate:"2025-03-12"},
-  {id:4,date:"2025-03-14",rep:"이승빈",customer:"셀트리온",category:"소재",product:"나노파티클 100nm",qty:"200mg",deadline:"2025-04-01",note:"",status:"수주",price:3800000,supplier:"알파나노텍",delivery:"2025-03-28",memo:"",quoteDate:"2025-03-16"},
-  {id:5,date:"2025-03-18",rep:"박은주",customer:"카이스트 생명공학부",category:"시약",product:"DMSO 500mL",qty:"10개",deadline:"2025-04-05",note:"순도 99.9% 이상",status:"미수주",price:450000,supplier:"다코리아",delivery:"2025-04-03",memo:"경쟁사 단가 낮음",quoteDate:"2025-03-20"},
-  {id:6,date:"2025-03-22",rep:"오지수",customer:"삼성바이오로직스",category:"소재",product:"마이크로비드 10μm",qty:"500mL",deadline:"2025-04-10",note:"",status:"견적완료",price:2100000,supplier:"머크",delivery:"2025-04-08",memo:"",quoteDate:"2025-03-24"},
-  {id:7,date:"2025-03-28",rep:"이승빈",customer:"녹십자",category:"시약",product:"ELISA Kit (IL-6)",qty:"5kit",deadline:"2025-04-15",note:"96well 기준",status:"대기중",price:null,supplier:"",delivery:"",memo:"",quoteDate:null},
-  {id:8,date:"2025-04-01",rep:"박은주",customer:"LG화학 연구소",category:"시약/소재 복합",product:"형광 프로브 세트",qty:"1세트",deadline:"2025-04-20",note:"파장 범위 400-700nm",status:"대기중",price:null,supplier:"",delivery:"",memo:"",quoteDate:null},
+  {id:1,date:"2025-02-15",rep:"오지수",customer:"유한양행",partNo:"G7513",product:"MTT Assay Kit",casNo:"298-93-1",pkg:"10kit",qty:"2",status:"수주",price:980000,supplier:"Sigma-Aldrich",delivery:"2025-02-26",memo:"",quoteDate:"2025-02-17"},
+  {id:2,date:"2025-02-20",rep:"이승빈",customer:"SK바이오팜",partNo:"P2153",product:"PLGA Microsphere",casNo:"26780-50-7",pkg:"1g",qty:"3",status:"수주",price:5500000,supplier:"Polysciences",delivery:"2025-03-06",memo:"",quoteDate:"2025-02-22"},
+  {id:3,date:"2025-03-10",rep:"오지수",customer:"한국바이오텍",partNo:"P5493",product:"PBS Buffer 1L",casNo:"7558-79-4",pkg:"1L",qty:"50",status:"수주",price:1250000,supplier:"Sigma-Aldrich",delivery:"2025-03-22",memo:"",quoteDate:"2025-03-12"},
+  {id:4,date:"2025-03-14",rep:"이승빈",customer:"셀트리온",partNo:"N7009",product:"Nanoparticle 100nm",casNo:"-",pkg:"200mg",qty:"2",status:"수주",price:3800000,supplier:"Nanocomposix",delivery:"2025-03-28",memo:"",quoteDate:"2025-03-16"},
+  {id:5,date:"2025-03-18",rep:"박은주",customer:"카이스트 생명공학부",partNo:"D2650",product:"DMSO 500mL",casNo:"67-68-5",pkg:"500mL",qty:"10",status:"미수주",price:450000,supplier:"Dako Korea",delivery:"2025-04-03",memo:"경쟁사 단가 낮음",quoteDate:"2025-03-20"},
+  {id:6,date:"2025-03-22",rep:"오지수",customer:"삼성바이오로직스",partNo:"M1136",product:"Microbead 10μm",casNo:"-",pkg:"500mL",qty:"1",status:"견적완료",price:2100000,supplier:"Merck",delivery:"2025-04-08",memo:"",quoteDate:"2025-03-24"},
+  {id:7,date:"2025-03-28",rep:"이승빈",customer:"녹십자",partNo:"E4127",product:"ELISA Kit (IL-6)",casNo:"-",pkg:"96well",qty:"5",status:"대기중",price:null,supplier:"",delivery:"",memo:"",quoteDate:null},
+  {id:8,date:"2025-04-01",rep:"박은주",customer:"LG화학 연구소",partNo:"F3021",product:"Fluorescent Probe Set",casNo:"-",pkg:"1 set",qty:"1",status:"대기중",price:null,supplier:"",delivery:"",memo:"",quoteDate:null},
 ];
 const DEFAULT_NOTIFS = [
   {id:1,type:"inquiry",text:"이승빈 → 구매: 녹십자 ELISA Kit 견적 문의",time:"2025-03-28 09:15",unread:true},
@@ -447,11 +443,9 @@ function renderTrend() {
 function renderTable() {
   const r=document.getElementById('f-rep').value;
   const s=document.getElementById('f-status').value;
-  const c=document.getElementById('f-cat').value;
   const list=inquiries.filter(i=>{
     if(r&&i.rep!==r)return false;
     if(s&&i.status!==s)return false;
-    if(c&&!i.category.includes(c))return false;
     return true;
   }).sort((a,b)=>b.id-a.id);
   document.getElementById('table-count').textContent=`총 ${list.length}건`;
@@ -460,15 +454,21 @@ function renderTable() {
       <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">${i.date}</td>
       <td>${i.rep}</td>
       <td style="font-weight:500;">${i.customer}</td>
-      <td><span style="font-size:11px;color:var(--text-secondary);">${i.category}</span></td>
+      <td style="font-size:11px;">${i.partNo||'-'}</td>
       <td style="font-size:12px;">${i.product.length>12?i.product.slice(0,12)+'…':i.product}</td>
+      <td style="font-size:11px;color:var(--text-secondary);">${i.casNo||'-'}</td>
+      <td style="font-size:11px;">${i.pkg||'-'}</td>
+      <td style="font-size:12px;">${i.qty||'-'}</td>
       <td style="font-size:12px;">${i.price?'₩'+(i.price/10000).toFixed(0)+'만':'-'}</td>
       <td><span class="badge ${STATUS_BADGE[i.status]||'b-wait'}">${i.status}</span></td>
-      <td>${i.status==='대기중'
-        ?`<button class="btn btn-sm btn-primary" onclick="openQuoteModal(${i.id})">견적입력</button>`
-        :`<button class="btn btn-sm" onclick="openQuoteModal(${i.id})">수정</button>`}</td>
+      <td style="display:flex;gap:5px;">
+        ${i.status==='대기중'
+          ?`<button class="btn btn-sm btn-primary" onclick="openQuoteModal(${i.id})">견적입력</button>`
+          :`<button class="btn btn-sm" onclick="openQuoteModal(${i.id})">수정</button>`}
+        <button class="btn btn-sm" style="color:#E24B4A;border-color:#F09595;" onclick="deleteInquiry(${i.id})">삭제</button>
+      </td>
     </tr>`).join('')
-    : '<tr><td colspan="8" class="empty">해당하는 항목 없음</td></tr>';
+    : '<tr><td colspan="11" class="empty">해당하는 항목 없음</td></tr>';
 }
 
 // ── Render: Notifications ─────────────────────────────────────
@@ -501,13 +501,7 @@ function updateBadges() {
 
 // ── Render: Analytics ────────────────────────────────────────
 function renderAnalytics() {
-  ['cat-chart','rep-chart','result-chart'].forEach(id=>{if(charts[id])charts[id].destroy();});
-  const cats=['시약','소재','시약/소재 복합'];
-  charts['cat-chart']=new Chart(document.getElementById('cat-chart'),{
-    type:'bar',
-    data:{labels:cats,datasets:[{label:'수주',data:cats.map(c=>inquiries.filter(i=>i.category===c&&i.status==='수주').length),backgroundColor:'#639922'},{label:'전체',data:cats.map(c=>inquiries.filter(i=>i.category===c).length),backgroundColor:'#D3D1C7'}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
-  });
+  ['rep-chart','result-chart','rate-chart'].forEach(id=>{if(charts[id])charts[id].destroy();});
   const reps=['오지수','이승빈','박은주'];
   charts['rep-chart']=new Chart(document.getElementById('rep-chart'),{
     type:'doughnut',
@@ -523,6 +517,16 @@ function renderAnalytics() {
     data:{labels:['수주','미수주','견적완료','대기중'],datasets:[{data:[won,lost,quoted,wait],backgroundColor:['#639922','#E24B4A','#378ADD','#BA7517']}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
   });
+  const rates=reps.map(r=>{
+    const dec=inquiries.filter(i=>i.rep===r&&['수주','미수주'].includes(i.status));
+    const w=inquiries.filter(i=>i.rep===r&&i.status==='수주').length;
+    return dec.length>0?Math.round(w/dec.length*100):0;
+  });
+  charts['rate-chart']=new Chart(document.getElementById('rate-chart'),{
+    type:'bar',
+    data:{labels:reps,datasets:[{label:'수주율(%)',data:rates,backgroundColor:['#378ADD','#1D9E75','#D85A30']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}
+  });
 }
 
 // ── Submit: 견적 문의 등록 ────────────────────────────────────
@@ -534,10 +538,12 @@ async function submitInquiry() {
 
   const inq={
     id:nextId++, date:new Date().toISOString().slice(0,10),
-    rep, customer, category:document.getElementById('i-cat').value,
-    product, qty:document.getElementById('i-qty').value,
-    deadline:document.getElementById('i-deadline').value,
-    note:document.getElementById('i-note').value,
+    rep, customer,
+    partNo:document.getElementById('i-partno').value.trim(),
+    product,
+    casNo:document.getElementById('i-casno').value.trim(),
+    pkg:document.getElementById('i-pkg').value.trim(),
+    qty:document.getElementById('i-qty').value.trim(),
     status:'대기중', price:null, supplier:'', delivery:'', memo:'', quoteDate:null
   };
   inquiries.push(inq);
@@ -556,7 +562,7 @@ async function submitInquiry() {
 function openQuoteModal(id) {
   quoteTarget=id;
   const i=inquiries.find(x=>x.id===id); if(!i) return;
-  document.getElementById('quote-info').textContent=`${i.rep} · ${i.customer} · ${i.product} · 희망납기: ${i.deadline||'-'}`;
+  document.getElementById('quote-info').textContent=`${i.rep} · ${i.customer} · ${i.product} · Cat No.: ${i.partNo||'-'} · CAS: ${i.casNo||'-'} · ${i.pkg||''} × ${i.qty||''}`;
   document.getElementById('q-price').value=i.price||'';
   document.getElementById('q-delivery').value=i.delivery||'';
   document.getElementById('q-supplier').value=i.supplier||'';
@@ -590,6 +596,14 @@ async function submitQuote() {
 
 function nowStr() {
   return new Date().toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(/\. /g,'-').replace('.',':').slice(0,-3);
+}
+
+function deleteInquiry(id) {
+  const i = inquiries.find(x=>x.id===id);
+  if(!i) return;
+  if(!confirm(`[${i.customer}] ${i.product} 견적을 삭제하시겠습니까?`)) return;
+  inquiries = inquiries.filter(x=>x.id!==id);
+  save(); renderAll(); renderTable();
 }
 
 function renderAll() {
